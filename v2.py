@@ -5,6 +5,9 @@ from sklearn.preprocessing import MinMaxScaler
 import numpy as np
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, GRU, Dense, Dropout, Conv1D, MaxPooling1D, Flatten
+import optuna
+from tensorflow.keras.callbacks import EarlyStopping
+
 
 def fetch_crypto_data(coin_id, days=365):
     """
@@ -124,3 +127,55 @@ def build_cnn_lstm_model(input_shape):
     
     model.compile(optimizer='adam', loss='mean_squared_error')
     return model
+
+
+def objective(trial):
+    """
+    Objective function for Optuna hyperparameter tuning.
+    """
+    model_type = trial.suggest_categorical('model_type', ['LSTM', 'GRU', 'CNN-LSTM'])
+    units = trial.suggest_int('units', 32, 128)
+    dropout = trial.suggest_float('dropout', 0.2, 0.5)
+    batch_size = trial.suggest_categorical('batch_size', [16, 32, 64])
+    epochs = trial.suggest_int('epochs', 10, 50)
+
+    if model_type == 'LSTM':
+        model = Sequential()
+        model.add(LSTM(units, return_sequences=True, input_shape=(60, len(feature_columns))))
+        model.add(Dropout(dropout))
+        model.add(LSTM(units, return_sequences=False))
+        model.add(Dropout(dropout))
+        model.add(Dense(25))
+        model.add(Dense(1))
+    elif model_type == 'GRU':
+        model = Sequential()
+        model.add(GRU(units, return_sequences=True, input_shape=(60, len(feature_columns))))
+        model.add(Dropout(dropout))
+        model.add(GRU(units, return_sequences=False))
+        model.add(Dropout(dropout))
+        model.add(Dense(25))
+        model.add(Dense(1))
+    else:  # CNN-LSTM
+        model = Sequential()
+        model.add(Conv1D(filters=64, kernel_size=3, activation='relu', input_shape=(60, len(feature_columns))))
+        model.add(MaxPooling1D(pool_size=2))
+        model.add(LSTM(units, return_sequences=False))
+        model.add(Dropout(dropout))
+        model.add(Dense(25))
+        model.add(Dense(1))
+
+    model.compile(optimizer='adam', loss='mean_squared_error')
+
+    # Early stopping
+    early_stop = EarlyStopping(monitor='val_loss', patience=5)
+    
+    model.fit(X_train, y_train, validation_data=(X_test, y_test), batch_size=batch_size, epochs=epochs, callbacks=[early_stop])
+    score = model.evaluate(X_test, y_test, verbose=0)
+    
+    return score
+
+study = optuna.create_study(direction='minimize')
+study.optimize(objective, n_trials=50)
+
+# Best hyperparameters
+print(study.best_params)
