@@ -179,3 +179,19 @@ study.optimize(objective, n_trials=50)
 
 # Best hyperparameters
 print(study.best_params)
+
+
+
+def predict_and_plot(model, X_test, y_test, scaler, coin_name):
+    predictions = model.predict(X_test)
+    predictions = scaler.inverse_transform(predictions)
+    y_test_actual = scaler.inverse_transform(y_test.reshape(-1, 1))
+
+    plt.figure(figsize=(12, 6))
+    plt.plot(y_test_actual, label='Actual Prices')
+    plt.plot(predictions, label='Predicted Prices')
+    plt.title(f'{coin_name.capitalize()} Price Prediction')
+    plt.xlabel('Days')
+    plt.ylabel('Price (USD)')
+    plt.legend()
+    plt.show()
